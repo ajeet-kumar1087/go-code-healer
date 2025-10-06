@@ -10,6 +10,13 @@ type PRRequest struct {
 	Changes     []FileChange `json:"changes"`
 }
 
+// PRResult represents the result of creating a pull request
+type PRResult struct {
+	URL    string `json:"url"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+}
+
 // FileChange represents a file modification
 type FileChange struct {
 	FilePath string `json:"file_path"`
@@ -36,13 +43,3 @@ type FixResponse struct {
 	Confidence  float64 `json:"confidence"`
 	IsValid     bool    `json:"is_valid"`
 }
-
-// // LogLevel represents the logging level
-// type LogLevel int
-
-// const (
-// 	LogLevelDebug LogLevel = iota
-// 	LogLevelInfo
-// 	LogLevelWarn
-// 	LogLevelError
-// )

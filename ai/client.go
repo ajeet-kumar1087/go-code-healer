@@ -5,15 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/ajeet-kumar1087/go-code-healer/internal"
 )
 
-// Logger interface for AI client logging
-type Logger interface {
-	Debug(msg string, args ...any)
-	Info(msg string, args ...any)
-	Warn(msg string, args ...any)
-	Error(msg string, args ...any)
-}
+// // Logger interface for AI client logging
+type Logger = internal.LoggerInterface
 
 // FixRequest represents a request for an AI-generated fix
 type FixRequest struct {
