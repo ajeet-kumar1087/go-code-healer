@@ -1,0 +1,12 @@
+{
+  "openai_api_key": "sk-your-openai-api-key-here",
+  "openai_model": "gpt-4",
+  "github_token": "ghp_your-github-token-here",
+  "repo_owner": "your-github-username",
+  "repo_name": "your-repository-name",
+  "enabled": true,
+  "max_queue_size": 100,
+  "worker_count": 2,
+  "retry_attempts": 3,
+  "log_level": "info"
+}
