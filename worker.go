@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/ajeet-kumar1087/go-code-healer/ai"
 )
 
 // BackgroundWorker handles background processing of panic events
@@ -144,24 +146,24 @@ func (w *BackgroundWorker) processEventWithAI(ctx context.Context, event PanicEv
 		w.logger.Debug("Worker %d starting AI processing for event %s", w.id, event.ID)
 	}
 
-	// Check if AI client is available
-	if w.healer.aiClient == nil {
+	// Check if provider manager is available
+	if w.healer.providerManager == nil {
 		if w.logger != nil {
-			w.logger.Debug("AI client not available, skipping AI processing for event %s", event.ID)
+			w.logger.Debug("Provider manager not available, skipping AI processing for event %s", event.ID)
 		}
 		return nil, nil // Not an error, just skip AI processing
 	}
 
 	// Create fix request from panic event
-	fixRequest := FixRequest{
+	fixRequest := ai.FixRequest{
 		Error:      event.Error,
 		StackTrace: event.StackTrace,
 		SourceCode: w.extractSourceCode(event),
 		Context:    event.GetContext(),
 	}
 
-	// Generate fix using AI client with timeout management
-	fixResponse, err := w.healer.aiClient.GenerateFix(aiCtx, fixRequest)
+	// Generate fix using provider manager with timeout management
+	fixResponse, err := w.healer.providerManager.GenerateFixWithFallback(aiCtx, fixRequest)
 	if err != nil {
 		// Check if it's a timeout or cancellation
 		if ctx.Err() != nil {

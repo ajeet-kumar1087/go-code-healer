@@ -13,8 +13,13 @@ func NewPromptGenerator() *PromptGenerator {
 	return &PromptGenerator{}
 }
 
-// GeneratePrompt creates a structured prompt for Go code fixes
+// GeneratePrompt creates a structured prompt for Go code fixes (legacy method)
 func (pg *PromptGenerator) GeneratePrompt(request FixRequest) string {
+	return pg.GeneratePromptWithMCP(request)
+}
+
+// GeneratePromptWithMCP creates a structured prompt for Go code fixes with MCP context
+func (pg *PromptGenerator) GeneratePromptWithMCP(request FixRequest) string {
 	var prompt strings.Builder
 
 	prompt.WriteString("I need help fixing a Go panic/error. Here are the details:\n\n")
@@ -38,6 +43,12 @@ func (pg *PromptGenerator) GeneratePrompt(request FixRequest) string {
 		prompt.WriteString("**Additional Context:**\n")
 		prompt.WriteString(request.Context)
 		prompt.WriteString("\n\n")
+	}
+
+	// Add MCP context if available
+	if request.MCPContext != nil {
+		prompt.WriteString("## Enhanced Context (from MCP tools)\n")
+		pg.addMCPContextToPrompt(&prompt, request.MCPContext)
 	}
 
 	prompt.WriteString("Please provide:\n")
@@ -72,4 +83,56 @@ Guidelines:
 - Consider edge cases and potential side effects of your fix
 
 Your response must be valid JSON with the exact structure requested.`
+}
+
+// addMCPContextToPrompt adds MCP-gathered context to the prompt
+func (pg *PromptGenerator) addMCPContextToPrompt(prompt *strings.Builder, mcpContext *ContextResponse) {
+	if mcpContext.FileStructure != "" {
+		prompt.WriteString("**Project Structure:**\n```\n")
+		prompt.WriteString(mcpContext.FileStructure)
+		prompt.WriteString("\n```\n\n")
+	}
+
+	if len(mcpContext.Dependencies) > 0 {
+		prompt.WriteString("**Dependencies:**\n")
+		for _, dep := range mcpContext.Dependencies {
+			prompt.WriteString(fmt.Sprintf("- %s\n", dep))
+		}
+		prompt.WriteString("\n")
+	}
+
+	if mcpContext.CodeAnalysis != "" {
+		prompt.WriteString("**Code Analysis:**\n")
+		prompt.WriteString(mcpContext.CodeAnalysis)
+		prompt.WriteString("\n\n")
+	}
+
+	if len(mcpContext.RelatedFiles) > 0 {
+		prompt.WriteString("**Related Files:**\n")
+		for _, file := range mcpContext.RelatedFiles {
+			prompt.WriteString(fmt.Sprintf("- %s\n", file))
+		}
+		prompt.WriteString("\n")
+	}
+
+	if len(mcpContext.Environment) > 0 {
+		prompt.WriteString("**Environment Information:**\n")
+		for key, value := range mcpContext.Environment {
+			prompt.WriteString(fmt.Sprintf("- %s: %s\n", key, value))
+		}
+		prompt.WriteString("\n")
+	}
+
+	if len(mcpContext.Suggestions) > 0 {
+		prompt.WriteString("**MCP Tool Suggestions:**\n")
+		for _, suggestion := range mcpContext.Suggestions {
+			prompt.WriteString(fmt.Sprintf("- %s\n", suggestion))
+		}
+		prompt.WriteString("\n")
+	}
+
+	if len(mcpContext.Sources) > 0 {
+		prompt.WriteString(fmt.Sprintf("*Context gathered from MCP tools: %s*\n\n",
+			strings.Join(mcpContext.Sources, ", ")))
+	}
 }

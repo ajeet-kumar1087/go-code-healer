@@ -12,12 +12,14 @@ import (
 // // Logger interface for AI client logging
 type Logger = internal.LoggerInterface
 
-// FixRequest represents a request for an AI-generated fix
+// FixRequest represents a request for an AI-generated fix with enhanced context
 type FixRequest struct {
-	Error      string `json:"error"`
-	StackTrace string `json:"stack_trace"`
-	SourceCode string `json:"source_code"`
-	Context    string `json:"context"`
+	Error      string            `json:"error"`
+	StackTrace string            `json:"stack_trace"`
+	SourceCode string            `json:"source_code"`
+	Context    string            `json:"context"`
+	MCPContext *ContextResponse  `json:"mcp_context,omitempty"` // Enhanced context from MCP
+	Metadata   map[string]string `json:"metadata,omitempty"`
 }
 
 // FixResponse represents the AI's response with a proposed fix
@@ -26,11 +28,15 @@ type FixResponse struct {
 	Explanation string  `json:"explanation"`
 	Confidence  float64 `json:"confidence"`
 	IsValid     bool    `json:"is_valid"`
+	Provider    string  `json:"provider"` // which AI provider generated this fix
+	UsedMCP     bool    `json:"used_mcp"` // whether MCP context was used
 }
 
 // Client interface for AI fix generation
 type Client interface {
 	GenerateFix(ctx context.Context, request FixRequest) (*FixResponse, error)
+	GetProviderName() string
+	ValidateConfiguration() error
 }
 
 // OpenAIClient implements the Client interface for OpenAI API integration
@@ -83,8 +89,8 @@ func (ai *OpenAIClient) GenerateFix(ctx context.Context, request FixRequest) (*F
 		return nil, fmt.Errorf("invalid fix request: %w", err)
 	}
 
-	// Generate structured prompt for Go code fixes
-	prompt := ai.promptGenerator.GeneratePrompt(request)
+	// Generate structured prompt for Go code fixes with MCP context
+	prompt := ai.promptGenerator.GeneratePromptWithMCP(request)
 
 	// Create OpenAI API request with enhanced parameters
 	apiRequest := openAIRequest{
@@ -119,10 +125,13 @@ func (ai *OpenAIClient) GenerateFix(ctx context.Context, request FixRequest) (*F
 	// Validate the proposed Go code for syntax correctness and calculate confidence
 	fixResponse.IsValid = ai.codeValidator.ValidateGoSyntax(fixResponse.ProposedFix)
 	fixResponse.Confidence = ai.adjustConfidenceScore(fixResponse.Confidence, fixResponse.IsValid, request)
+	fixResponse.Provider = "openai"
+	fixResponse.UsedMCP = request.MCPContext != nil
 
 	// Log the result for debugging
 	if ai.logger != nil {
-		ai.logger.Debug("Generated fix with confidence %.2f, valid: %v", fixResponse.Confidence, fixResponse.IsValid)
+		ai.logger.Debug("Generated fix with confidence %.2f, valid: %v, used MCP: %v",
+			fixResponse.Confidence, fixResponse.IsValid, fixResponse.UsedMCP)
 	}
 
 	return fixResponse, nil
@@ -195,4 +204,20 @@ func (ai *OpenAIClient) adjustConfidenceScore(originalConfidence float64, isVali
 // assessErrorComplexity analyzes the error to determine its complexity level
 func (ai *OpenAIClient) assessErrorComplexity(request FixRequest) string {
 	return ai.codeValidator.AssessErrorComplexity(request)
+}
+
+// GetProviderName returns the provider name
+func (ai *OpenAIClient) GetProviderName() string {
+	return "openai"
+}
+
+// ValidateConfiguration validates the OpenAI client configuration
+func (ai *OpenAIClient) ValidateConfiguration() error {
+	if ai.apiKey == "" {
+		return fmt.Errorf("OpenAI API key is required")
+	}
+	if ai.model == "" {
+		return fmt.Errorf("OpenAI model is required")
+	}
+	return nil
 }
