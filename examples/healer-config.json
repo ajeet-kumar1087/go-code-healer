@@ -1,6 +1,30 @@
 {
+  "ai_provider": "openai",
   "openai_api_key": "sk-your-openai-api-key-here",
   "openai_model": "gpt-4",
+  "claude_api_key": "sk-ant-your-claude-api-key-here",
+  "claude_model": "claude-3-sonnet-20240229",
+  "codex_api_key": "sk-your-codex-api-key-here",
+  "codex_model": "code-davinci-002",
+  "mcp_enabled": true,
+  "mcp_timeout": 10,
+  "mcp_servers": [
+    {
+      "name": "filesystem-analyzer",
+      "endpoint": "http://localhost:8001/mcp",
+      "auth_type": "none",
+      "tools": ["analyze_structure", "find_dependencies"],
+      "timeout": 5
+    },
+    {
+      "name": "code-analyzer",
+      "endpoint": "http://localhost:8002/mcp",
+      "auth_type": "bearer",
+      "auth_token": "your-mcp-token-here",
+      "tools": ["parse_ast", "analyze_symbols"],
+      "timeout": 8
+    }
+  ],
   "github_token": "ghp_your-github-token-here",
   "repo_owner": "your-github-username",
   "repo_name": "your-repository-name",

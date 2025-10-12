@@ -7,171 +7,53 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/ajeet-kumar1087/go-code-healer/ai"
+	"github.com/ajeet-kumar1087/go-code-healer/internal"
 )
 
-// Config holds the configuration for the healer
-type Config struct {
-	// AI Configuration
-	OpenAIAPIKey string `json:"openai_api_key"`
-	OpenAIModel  string `json:"openai_model,omitempty"` // defaults to "gpt-4"
+// Config is an alias to internal.Config for backward compatibility
+type Config = internal.Config
 
-	// GitHub Configuration
-	GitHubToken string `json:"github_token"`
-	RepoOwner   string `json:"repo_owner"`
-	RepoName    string `json:"repo_name"`
-
-	// Processing Configuration
-	Enabled       bool `json:"enabled"`
-	MaxQueueSize  int  `json:"max_queue_size,omitempty"` // defaults to 100
-	WorkerCount   int  `json:"worker_count,omitempty"`   // defaults to 2
-	RetryAttempts int  `json:"retry_attempts,omitempty"` // defaults to 3
-
-	// Logging Configuration
-	LogLevel string `json:"log_level,omitempty"` // defaults to "info"
-}
-
-// ApplyDefaults applies default values to unset fields
-func (c *Config) ApplyDefaults() {
-	if c.OpenAIModel == "" {
-		c.OpenAIModel = "gpt-4"
-	}
-	if c.MaxQueueSize == 0 {
-		c.MaxQueueSize = 100
-	}
-	if c.WorkerCount == 0 {
-		c.WorkerCount = 2
-	}
-	if c.RetryAttempts == 0 {
-		c.RetryAttempts = 3
-	}
-	if c.LogLevel == "" {
-		c.LogLevel = "info"
-	}
-}
-
-// Validate checks if the configuration is valid
-func (c *Config) Validate() error {
-	var errs []error
-
-	// Check required fields when enabled
-	if c.Enabled {
-		if c.OpenAIAPIKey == "" {
-			errs = append(errs, fmt.Errorf("OpenAI API key is required when healer is enabled"))
-		}
-		if c.GitHubToken == "" {
-			errs = append(errs, fmt.Errorf("GitHub token is required when healer is enabled"))
-		}
-		if c.RepoOwner == "" {
-			errs = append(errs, fmt.Errorf("repository owner is required when healer is enabled"))
-		}
-		if c.RepoName == "" {
-			errs = append(errs, fmt.Errorf("repository name is required when healer is enabled"))
-		}
-	}
-
-	// Validate numeric fields
-	if c.MaxQueueSize <= 0 {
-		errs = append(errs, fmt.Errorf("max queue size must be greater than 0"))
-	}
-	if c.WorkerCount <= 0 {
-		errs = append(errs, fmt.Errorf("worker count must be greater than 0"))
-	}
-	if c.RetryAttempts < 0 {
-		errs = append(errs, fmt.Errorf("retry attempts cannot be negative"))
-	}
-
-	// Validate log level
-	validLogLevels := []string{"debug", "info", "warn", "error"}
-	logLevelValid := false
-	for _, level := range validLogLevels {
-		if c.LogLevel == level {
-			logLevelValid = true
-			break
-		}
-	}
-	if !logLevelValid {
-		errs = append(errs, fmt.Errorf("invalid log level '%s', must be one of: %v", c.LogLevel, validLogLevels))
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("configuration validation failed: %v", errs)
-	}
-	return nil
-}
-
-// ValidateComplete performs comprehensive validation with clear error messages
-func (c *Config) ValidateComplete() error {
-	return c.Validate() // For now, same as basic validation
-}
+// ProviderManager is an alias to ai.ProviderManager
+type ProviderManager = ai.ProviderManager
 
 // DefaultConfig returns a Config with default values
 func DefaultConfig() Config {
-	return Config{
-		OpenAIModel:   "gpt-4",
-		Enabled:       true,
-		MaxQueueSize:  100,
-		WorkerCount:   2,
-		RetryAttempts: 3,
-		LogLevel:      "info",
-	}
+	return internal.DefaultConfig()
 }
 
 // LoadConfig loads configuration from JSON file and environment variables
 func LoadConfig(configPath string) (*Config, error) {
-	config := DefaultConfig()
-
-	// For now, just return the default config
-	// TODO: Implement file loading if needed
-	config.ApplyDefaults()
-
-	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("configuration validation failed: %w", err)
-	}
-
-	return &config, nil
+	return internal.LoadConfig(configPath)
 }
 
 // GetFallbackConfig returns a minimal configuration that disables features when required settings are missing
 func GetFallbackConfig() *Config {
-	config := DefaultConfig()
-	config.ApplyDefaults()
-
-	// Disable if required settings are missing
-	if config.OpenAIAPIKey == "" || config.GitHubToken == "" || config.RepoOwner == "" || config.RepoName == "" {
-		config.Enabled = false
-	}
-
-	return &config
-}
-
-// LoadFromEnv loads configuration values from environment variables
-func (c *Config) LoadFromEnv() error {
-	// This is a placeholder implementation
-	// In a real implementation, you would load from os.Getenv()
-	return nil
+	return internal.GetFallbackConfig()
 }
 
 // Healer is the main struct that manages error healing
 type Healer struct {
-	config         Config
-	errorQueue     chan PanicEvent
-	aiClient       AIClient
-	gitClient      GitClient
-	logger         Logger
-	workerPool     *WorkerPool
-	queueManager   *QueueManager
-	retryManager   *RetryManager
-	circuitBreaker *CircuitBreaker
-	panicCapture   *PanicCapture
-	ctx            context.Context
-	cancel         context.CancelFunc
+	config          Config
+	errorQueue      chan PanicEvent
+	providerManager *ProviderManager
+	gitClient       GitClient
+	logger          Logger
+	workerPool      *WorkerPool
+	queueManager    *QueueManager
+	retryManager    *RetryManager
+	circuitBreaker  *CircuitBreaker
+	panicCapture    *PanicCapture
+	ctx             context.Context
+	cancel          context.CancelFunc
 }
 
 // Initialize creates and starts the healer with the given configuration
 func Initialize(config Config) (*Healer, error) {
 	// Apply defaults and validate configuration
 	config.ApplyDefaults()
-	if err := config.Validate(); err != nil {
+	if err := config.ValidateComplete(); err != nil {
 		return nil, err
 	}
 
@@ -179,7 +61,7 @@ func Initialize(config Config) (*Healer, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create logger
-	logger := NewDefaultLogger(config.LogLevel)
+	logger := internal.NewDefaultLogger(config.LogLevel)
 
 	// Create healer instance
 	healer := &Healer{
@@ -190,12 +72,21 @@ func Initialize(config Config) (*Healer, error) {
 		cancel:     cancel,
 	}
 
-	// Initialize AI client if enabled and configured
-	if config.Enabled && config.OpenAIAPIKey != "" {
-		healer.aiClient = NewOpenAIClient(config.OpenAIAPIKey, config.OpenAIModel, logger)
-		logger.Info("AI client initialized with model: %s", config.OpenAIModel)
+	// Initialize provider manager with multi-AI support and MCP
+	if config.Enabled {
+		providerManager, err := ai.NewProviderManager(config, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create provider manager: %w", err)
+		}
+		healer.providerManager = providerManager
+		logger.Info("Provider manager initialized with AI providers and MCP support")
+
+		// Validate providers
+		if err := providerManager.ValidateProviders(); err != nil {
+			logger.Warn("Provider validation warnings: %v", err)
+		}
 	} else {
-		logger.Info("AI client disabled - missing API key or healer disabled")
+		logger.Info("Healer disabled - skipping provider initialization")
 	}
 
 	// Initialize Git client if enabled and configured
@@ -532,4 +423,57 @@ func (h *Healer) GetQueueManager() QueueManagerInterface {
 // GetErrorQueue returns the error queue (implements HealerInterface)
 func (h *Healer) GetErrorQueue() chan PanicEvent {
 	return h.errorQueue
+}
+
+// CreateAISession creates a new AI session for comprehensive error analysis and fixing
+func (h *Healer) CreateAISession() *ai.SessionManager {
+	if h.providerManager == nil {
+		return nil
+	}
+	return h.providerManager.CreateSession(h.gitClient)
+}
+
+// ProcessErrorWithSession processes an error using the session-based approach
+func (h *Healer) ProcessErrorWithSession(ctx context.Context, panicEvent PanicEvent) (*ai.SessionResult, error) {
+	if h.providerManager == nil {
+		return nil, fmt.Errorf("provider manager not initialized")
+	}
+
+	// Create AI session
+	session := h.CreateAISession()
+	if session == nil {
+		return nil, fmt.Errorf("failed to create AI session")
+	}
+
+	// Convert PanicEvent to ErrorInfo
+	errorInfo := &ai.ErrorInfo{
+		Error:      fmt.Sprintf("%v", panicEvent.Error),
+		StackTrace: panicEvent.StackTrace,
+		SourceFile: panicEvent.SourceFile,
+		LineNumber: panicEvent.LineNumber,
+		Function:   panicEvent.Function,
+		Timestamp:  panicEvent.Timestamp,
+		Severity:   "high", // Default severity
+	}
+
+	// Create code context (this could be enhanced with actual source code extraction)
+	codeContext := &ai.CodeContext{
+		SourceCode:   "// Source code would be extracted here",
+		RelatedFiles: []string{panicEvent.SourceFile},
+		FunctionSig:  panicEvent.Function,
+	}
+
+	// Initiate comprehensive session
+	return session.InitiateSession(ctx, errorInfo, codeContext)
+}
+
+// GetProviderStatus returns status of AI providers and MCP
+func (h *Healer) GetProviderStatus() map[string]interface{} {
+	if h.providerManager == nil {
+		return map[string]interface{}{
+			"enabled": false,
+			"reason":  "provider manager not initialized",
+		}
+	}
+	return h.providerManager.GetProviderStatus()
 }
